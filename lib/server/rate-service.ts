@@ -1,6 +1,7 @@
 import { db } from "./db";
 import { Decimal } from "decimal.js";
 import { RateType } from "../mock-rates";
+import { LiveFXService } from "./live-fx-service";
 
 // Configure high-precision Decimal arithmetic
 Decimal.set({ precision: 28, rounding: Decimal.ROUND_HALF_UP });
@@ -53,11 +54,26 @@ export interface CompareItem {
 }
 
 export class RateService {
+  private static lastSyncCheck = 0;
+
+  private static ensureFreshRates() {
+    const now = Date.now();
+    // Auto-refresh every 10 minutes in background
+    if (now - RateService.lastSyncCheck > 10 * 60 * 1000) {
+      RateService.lastSyncCheck = now;
+      LiveFXService.syncLiveRates().catch((err) =>
+        console.warn("Auto-sync background check notice:", err)
+      );
+    }
+  }
+
   public static async getCurrencies(category?: string) {
+    RateService.ensureFreshRates();
     return db.getCurrencies(category);
   }
 
   public static async getLatestRates(baseCode = "USD", targetCode = "NGN") {
+    RateService.ensureFreshRates();
     const base = baseCode.toUpperCase();
     const target = targetCode.toUpperCase();
 
@@ -220,6 +236,7 @@ export class RateService {
   }
 
   public static async getMarketStatus() {
+    RateService.ensureFreshRates();
     return db.getMarketSession();
   }
 

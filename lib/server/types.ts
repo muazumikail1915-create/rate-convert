@@ -82,6 +82,20 @@ export interface DBMarketSession {
   lastUpdatedWAT: string;
 }
 
+export interface LiveSyncResult {
+  success: boolean;
+  timestamp: string;
+  source: string;
+  cbnRate: number;
+  parallelMidRate: number;
+  spreadPercent: number;
+  marketStatus: "OPEN" | "CLOSED" | "HOLIDAY";
+  totalCurrenciesUpdated: number;
+  alertsEvaluated: number;
+  alertsTriggered: number;
+  message: string;
+}
+
 // --- Authentication & RBAC Types ---
 
 export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";

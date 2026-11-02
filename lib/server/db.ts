@@ -27,6 +27,13 @@ class DatabaseRepository {
   private rateAlerts: Map<string, DBRateAlert> = new Map();
   private marketSession: DBMarketSession;
 
+  // Live FX Feed State
+  private liveBaseRatesToNgn: Record<string, { official: number; bank: number; provider: number }> = {
+    ...BASE_RATES_TO_NGN,
+  };
+  private lastLiveSync: string = new Date().toISOString();
+  private liveSyncSource: string = "SEED";
+
   // Auth State
   private users: Map<string, DBUser> = new Map();
   private refreshTokens: Map<string, DBRefreshToken> = new Map(); // key = tokenHash
@@ -183,8 +190,8 @@ class DatabaseRepository {
     const base = baseCode.toUpperCase();
     const target = targetCode.toUpperCase();
 
-    const baseObj = BASE_RATES_TO_NGN[base] || { official: 1, bank: 1, provider: 1 };
-    const targetObj = BASE_RATES_TO_NGN[target] || { official: 1, bank: 1, provider: 1 };
+    const baseObj = this.liveBaseRatesToNgn[base] || BASE_RATES_TO_NGN[base] || { official: 1, bank: 1, provider: 1 };
+    const targetObj = this.liveBaseRatesToNgn[target] || BASE_RATES_TO_NGN[target] || { official: 1, bank: 1, provider: 1 };
 
     return Array.from(this.rateSources.values()).map((source) => {
       const rateKey = (source.type === "bank" ? "bank" : source.type === "official" ? "official" : "provider") as "official" | "bank" | "provider";
@@ -252,6 +259,96 @@ class DatabaseRepository {
     return {
       ...this.marketSession,
       lastUpdatedWAT: new Date().toISOString(),
+    };
+  }
+
+  // --- Live FX Feed Operations ---
+
+  public updateLiveRates(
+    rates: Record<string, { official: number; bank: number; provider: number }>,
+    marketSessionUpdate?: Partial<DBMarketSession>,
+    sourceLabel?: string
+  ): { updatedCount: number; alertsEvaluated: number; alertsTriggered: number } {
+    // 1. Update live rates map
+    Object.keys(rates).forEach((code) => {
+      this.liveBaseRatesToNgn[code.toUpperCase()] = rates[code];
+    });
+
+    this.lastLiveSync = new Date().toISOString();
+    if (sourceLabel) this.liveSyncSource = sourceLabel;
+
+    // 2. Update market session metrics if provided
+    if (marketSessionUpdate) {
+      this.marketSession = {
+        ...this.marketSession,
+        ...marketSessionUpdate,
+        lastUpdatedWAT: new Date().toISOString(),
+      };
+    }
+
+    // 3. Evaluate active user alerts
+    let alertsEvaluated = 0;
+    let alertsTriggered = 0;
+    const allAlerts = Array.from(this.rateAlerts.values());
+
+    allAlerts.forEach((alert) => {
+      if (alert.status === "ACTIVE") {
+        alertsEvaluated++;
+        const currentRates = this.getExchangeRates(alert.baseCurrency, alert.targetCurrency);
+        const currentRate = currentRates[0]?.buyRate;
+
+        if (currentRate !== undefined) {
+          let isTriggered = false;
+          if (alert.direction === "ABOVE" && currentRate >= alert.targetRate) {
+            isTriggered = true;
+          } else if (alert.direction === "BELOW" && currentRate <= alert.targetRate) {
+            isTriggered = true;
+          }
+
+          if (isTriggered) {
+            alert.status = "TRIGGERED";
+            alert.triggeredAt = new Date().toISOString();
+            this.rateAlerts.set(alert.id, alert);
+            alertsTriggered++;
+
+            // Create system audit entry
+            this.createAuditLog({
+              action: "RATE_ALERT_TRIGGERED",
+              resource: alert.id,
+              details: {
+                userContact: alert.userContact,
+                pair: `${alert.baseCurrency}/${alert.targetCurrency}`,
+                targetRate: alert.targetRate,
+                triggeredRate: currentRate,
+                direction: alert.direction,
+              },
+            });
+          }
+        }
+      }
+    });
+
+    return {
+      updatedCount: Object.keys(rates).length,
+      alertsEvaluated,
+      alertsTriggered,
+    };
+  }
+
+  public getLiveSyncInfo(): {
+    lastSync: string;
+    source: string;
+    trackedCurrencies: number;
+    activeAlerts: number;
+  } {
+    const activeAlerts = Array.from(this.rateAlerts.values()).filter(
+      (a) => a.status === "ACTIVE"
+    ).length;
+    return {
+      lastSync: this.lastLiveSync,
+      source: this.liveSyncSource,
+      trackedCurrencies: Object.keys(this.liveBaseRatesToNgn).length,
+      activeAlerts,
     };
   }
 

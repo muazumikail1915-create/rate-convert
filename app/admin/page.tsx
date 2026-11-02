@@ -14,6 +14,8 @@ import {
   Clock,
   Sliders,
   LogOut,
+  RefreshCw,
+  Radio,
 } from "lucide-react";
 
 interface UserItem {
@@ -31,6 +33,7 @@ export default function AdminWorkspacePage() {
   const [isLoading, setIsLoading] = useState(true);
   const [marketStatus, setMarketStatus] = useState("OPEN");
   const [actionSuccess, setActionSuccess] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     fetch("/api/auth/me")
@@ -41,6 +44,24 @@ export default function AdminWorkspacePage() {
 
     loadUsers();
   }, []);
+
+  const handleLiveSync = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/v1/market/sync", { method: "POST" });
+      const data = await res.json();
+      if (data.success && data.data) {
+        setActionSuccess(
+          `Live FX Feed synchronized: USD/NGN at ₦${data.data.cbnRate}, Parallel at ₦${data.data.parallelMidRate}.`
+        );
+        setTimeout(() => setActionSuccess(null), 4000);
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const loadUsers = async () => {
     try {
@@ -143,7 +164,7 @@ export default function AdminWorkspacePage() {
         )}
 
         {/* Quick Stats Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
             <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
               <span>NFEM Session Window</span>
@@ -195,6 +216,25 @@ export default function AdminWorkspacePage() {
             </div>
             <div className="text-lg font-bold text-emerald-400">Strict Dual-Token JWT</div>
             <p className="text-[11px] text-slate-500">MFA Enforced on Staff Roles</p>
+          </div>
+
+          <div className="p-5 rounded-2xl bg-slate-900/80 border border-slate-800 space-y-2">
+            <div className="flex items-center justify-between text-xs text-slate-400 font-semibold">
+              <span>Live FX Feed Sync</span>
+              <Radio className="w-4 h-4 text-emerald-400 animate-pulse" />
+            </div>
+            <div className="text-xs font-bold text-slate-200">Global Interbank Feed</div>
+            <div className="pt-1">
+              <button
+                type="button"
+                onClick={handleLiveSync}
+                disabled={isSyncing}
+                className="w-full flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 text-[11px] font-bold transition disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin" : ""}`} />
+                <span>{isSyncing ? "Syncing..." : "Sync Live Rates"}</span>
+              </button>
+            </div>
           </div>
         </div>
 
