@@ -1,0 +1,117 @@
+// Prisma Schema for Nigerian FX Intelligence & Global Currency Converter Platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model Currency {
+  id          String   @id @default(uuid())
+  code        String   @unique // e.g. "USD", "NGN", "GBP", "XOF"
+  name        String   // e.g. "Nigerian Naira"
+  symbol      String   // e.g. "₦", "$"
+  country     String   // e.g. "Nigeria"
+  countryCode String   // e.g. "NG"
+  flagEmoji   String   // e.g. "🇳🇬"
+  decimals    Int      @default(2)
+  category    String   // "major", "african", "emerging"
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  ratesAsBase   ExchangeRate[] @relation("BaseCurrency")
+  ratesAsTarget ExchangeRate[] @relation("TargetCurrency")
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model RateSource {
+  id            String   @id // e.g. "cbn-nfem", "wise", "lemfi", "gtbank", "access"
+  name          String   // e.g. "Central Bank of Nigeria (NFEM)"
+  type          String   // "official", "bank", "provider", "parallel"
+  logoText      String?  // e.g. "CBN", "WISE"
+  color         String?  // e.g. "#059669"
+  isActive      Boolean  @default(true)
+  deliverySpeed String   @default("Instant")
+  fixedFee      Float    @default(0.0)
+  percentFee    Float    @default(0.0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  rates ExchangeRate[]
+
+  @@index([type])
+}
+
+model ExchangeRate {
+  id               String      @id @default(uuid())
+  sourceId         String
+  source           RateSource  @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+  baseCurrencyCode String
+  baseCurrency     Currency    @relation("BaseCurrency", fields: [baseCurrencyCode], references: [code], onDelete: Cascade)
+  targetCurrencyCode String
+  targetCurrency   Currency    @relation("TargetCurrency", fields: [targetCurrencyCode], references: [code], onDelete: Cascade)
+  
+  buyRate          Float       // Rate to buy base currency in target
+  sellRate         Float       // Rate to sell base currency in target
+  midRate          Float       // Indicative mid rate
+  fixedFee         Float       @default(0.0)
+  percentFee       Float       @default(0.0)
+  isStale          Boolean     @default(false)
+  timestamp        DateTime    @default(now())
+  createdAt        DateTime    @default(now())
+
+  @@index([baseCurrencyCode, targetCurrencyCode])
+  @@index([sourceId])
+  @@index([timestamp])
+}
+
+model HistoricalRate {
+  id           String   @id @default(uuid())
+  pair         String   // e.g. "USD_NGN"
+  timeframe    String   // "24H", "7D", "30D", "90D", "1Y"
+  rate         Float
+  high         Float
+  low          Float
+  volume       Float    @default(0.0)
+  timestamp    DateTime
+  createdAt    DateTime @default(now())
+
+  @@index([pair, timeframe])
+  @@index([timestamp])
+}
+
+model RateAlert {
+  id             String    @id @default(uuid())
+  userContact    String    // Email or phone number
+  baseCurrency   String    // e.g. "USD"
+  targetCurrency String    // e.g. "NGN"
+  targetRate     Float     // Trigger price
+  direction      String    // "ABOVE" | "BELOW"
+  status         String    @default("ACTIVE") // "ACTIVE", "TRIGGERED", "EXPIRED"
+  createdAt      DateTime  @default(now())
+  triggeredAt    DateTime?
+
+  @@index([status])
+  @@index([baseCurrency, targetCurrency])
+}
+
+model MarketSession {
+  id              String   @id @default("nfem-window")
+  name            String   @default("NFEM Active Trading Window")
+  openTimeWAT     String   @default("09:00")
+  closeTimeWAT    String   @default("16:30")
+  status          String   @default("OPEN") // "OPEN", "CLOSED", "HOLIDAY"
+  cbnRate         Float    @default(1540.50)
+  cbnChange24h    Float    @default(-0.35)
+  parallelMidRate Float    @default(1615.00)
+  parallelChange24h Float  @default(0.62)
+  spreadPercent   Float    @default(4.83)
+  turnover24hUsd  String   @default("$142.8M")
+  lastUpdatedWAT  DateTime @default(now())
+}
