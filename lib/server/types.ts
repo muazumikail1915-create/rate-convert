@@ -81,3 +81,64 @@ export interface DBMarketSession {
   turnover24hUsd: string;
   lastUpdatedWAT: string;
 }
+
+// --- Authentication & RBAC Types ---
+
+export type UserRole = "USER" | "ADMIN" | "SUPER_ADMIN";
+
+export type UserStatus = "ACTIVE" | "PENDING_VERIFICATION" | "SUSPENDED" | "LOCKED";
+
+export interface DBUser {
+  id: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+  role: UserRole;
+  status: UserStatus;
+  mfaEnabled: boolean;
+  mfaSecret?: string;
+  failedLoginAttempts: number;
+  lockoutUntil?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DBRefreshToken {
+  id: string;
+  tokenHash: string;
+  userId: string;
+  userAgent?: string;
+  ipAddress?: string;
+  revoked: boolean;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface DBVerificationToken {
+  id: string;
+  identifier: string; // email
+  token: string;      // 6-digit OTP code or secret token
+  type: "EMAIL_VERIFY" | "PASSWORD_RESET" | "MFA_CHALLENGE";
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface DBAuditLog {
+  id: string;
+  userId?: string;
+  userEmail?: string;
+  action: string;
+  resource?: string;
+  details?: Record<string, unknown>;
+  ipAddress?: string;
+  createdAt: string;
+}
+
+export interface AuthJWTPayload {
+  userId: string;
+  email: string;
+  role: UserRole;
+  status: UserStatus;
+  [key: string]: unknown;
+}
+

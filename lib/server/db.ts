@@ -5,6 +5,11 @@ import {
   DBHistoricalRate,
   DBRateAlert,
   DBMarketSession,
+  DBUser,
+  DBRefreshToken,
+  DBVerificationToken,
+  DBAuditLog,
+  UserRole,
 } from "./types";
 import {
   SUPPORTED_CURRENCIES,
@@ -13,6 +18,7 @@ import {
   CURRENT_MARKET_METRICS,
   generateHistoricalData,
 } from "../mock-rates";
+import bcrypt from "bcryptjs";
 
 class DatabaseRepository {
   private currencies: Map<string, DBCurrency> = new Map();
@@ -20,6 +26,12 @@ class DatabaseRepository {
   private exchangeRates: DBExchangeRate[] = [];
   private rateAlerts: Map<string, DBRateAlert> = new Map();
   private marketSession: DBMarketSession;
+
+  // Auth State
+  private users: Map<string, DBUser> = new Map();
+  private refreshTokens: Map<string, DBRefreshToken> = new Map(); // key = tokenHash
+  private verificationTokens: Map<string, DBVerificationToken> = new Map(); // key = identifier_type
+  private auditLogs: DBAuditLog[] = [];
 
   constructor() {
     // Seed Currencies
@@ -94,6 +106,54 @@ class DatabaseRepository {
       turnover24hUsd: CURRENT_MARKET_METRICS.turnover24hUsd,
       lastUpdatedWAT: new Date().toISOString(),
     };
+
+    // Seed Initial RBAC Users (Default test credentials)
+    const userHash = bcrypt.hashSync("User123!", 10);
+    const adminHash = bcrypt.hashSync("Admin123!", 10);
+    const superAdminHash = bcrypt.hashSync("SuperAdmin123!", 10);
+
+    const initialUsers: DBUser[] = [
+      {
+        id: "usr_regular_001",
+        email: "user@rateconvert.com",
+        name: "Standard Trader",
+        passwordHash: userHash,
+        role: "USER",
+        status: "ACTIVE",
+        mfaEnabled: false,
+        failedLoginAttempts: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "usr_admin_002",
+        email: "admin@rateconvert.com",
+        name: "Desk Administrator",
+        passwordHash: adminHash,
+        role: "ADMIN",
+        status: "ACTIVE",
+        mfaEnabled: true,
+        mfaSecret: "JBSWY3DPEHPK3PXP",
+        failedLoginAttempts: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+      {
+        id: "usr_superadmin_003",
+        email: "superadmin@rateconvert.com",
+        name: "Chief Systems Officer",
+        passwordHash: superAdminHash,
+        role: "SUPER_ADMIN",
+        status: "ACTIVE",
+        mfaEnabled: true,
+        mfaSecret: "KREESTC7MRUWEV2V",
+        failedLoginAttempts: 0,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
+    ];
+
+    initialUsers.forEach((u) => this.users.set(u.id, u));
   }
 
   // --- Currency Operations ---
@@ -193,6 +253,196 @@ class DatabaseRepository {
       ...this.marketSession,
       lastUpdatedWAT: new Date().toISOString(),
     };
+  }
+
+  // --- User & RBAC Operations ---
+
+  public createUser(userData: {
+    email: string;
+    name: string;
+    passwordHash: string;
+    role?: UserRole;
+    status?: DBUser["status"];
+    mfaEnabled?: boolean;
+    mfaSecret?: string;
+  }): DBUser {
+    const id = `usr_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    const now = new Date().toISOString();
+    const newUser: DBUser = {
+      id,
+      email: userData.email.toLowerCase().trim(),
+      name: userData.name.trim(),
+      passwordHash: userData.passwordHash,
+      role: userData.role || "USER",
+      status: userData.status || "PENDING_VERIFICATION",
+      mfaEnabled: userData.mfaEnabled || false,
+      mfaSecret: userData.mfaSecret,
+      failedLoginAttempts: 0,
+      createdAt: now,
+      updatedAt: now,
+    };
+    this.users.set(id, newUser);
+    return newUser;
+  }
+
+  public getUserByEmail(email: string): DBUser | undefined {
+    const normalized = email.toLowerCase().trim();
+    const allUsers = Array.from(this.users.values());
+    for (const user of allUsers) {
+      if (user.email.toLowerCase() === normalized) {
+        return user;
+      }
+    }
+    return undefined;
+  }
+
+  public getUserById(id: string): DBUser | undefined {
+    return this.users.get(id);
+  }
+
+  public updateUser(id: string, updates: Partial<DBUser>): DBUser | undefined {
+    const user = this.users.get(id);
+    if (!user) return undefined;
+    const updatedUser: DBUser = {
+      ...user,
+      ...updates,
+      updatedAt: new Date().toISOString(),
+    };
+    this.users.set(id, updatedUser);
+    return updatedUser;
+  }
+
+  public getAllUsers(): Omit<DBUser, "passwordHash" | "mfaSecret">[] {
+    return Array.from(this.users.values()).map((u) => ({
+      id: u.id,
+      email: u.email,
+      name: u.name,
+      role: u.role,
+      status: u.status,
+      mfaEnabled: u.mfaEnabled,
+      failedLoginAttempts: u.failedLoginAttempts,
+      lockoutUntil: u.lockoutUntil,
+      createdAt: u.createdAt,
+      updatedAt: u.updatedAt,
+    }));
+  }
+
+  // --- Verification Tokens (Email OTP, 2FA, Reset) ---
+
+  public createVerificationToken(
+    identifier: string,
+    type: DBVerificationToken["type"],
+    token: string,
+    ttlMinutes = 15
+  ): DBVerificationToken {
+    const id = `vt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();
+    const key = `${identifier.toLowerCase()}_${type}`;
+    const item: DBVerificationToken = {
+      id,
+      identifier: identifier.toLowerCase(),
+      token,
+      type,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+    };
+    this.verificationTokens.set(key, item);
+    return item;
+  }
+
+  public getVerificationToken(
+    identifier: string,
+    type: DBVerificationToken["type"]
+  ): DBVerificationToken | undefined {
+    const key = `${identifier.toLowerCase()}_${type}`;
+    return this.verificationTokens.get(key);
+  }
+
+  public deleteVerificationToken(
+    identifier: string,
+    type: DBVerificationToken["type"]
+  ): void {
+    const key = `${identifier.toLowerCase()}_${type}`;
+    this.verificationTokens.delete(key);
+  }
+
+  // --- Refresh Tokens (Session Persistence & Rotation) ---
+
+  public storeRefreshToken(
+    tokenHash: string,
+    userId: string,
+    expiresAt: string,
+    userAgent?: string,
+    ipAddress?: string
+  ): DBRefreshToken {
+    const id = `rt_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const session: DBRefreshToken = {
+      id,
+      tokenHash,
+      userId,
+      userAgent,
+      ipAddress,
+      revoked: false,
+      expiresAt,
+      createdAt: new Date().toISOString(),
+    };
+    this.refreshTokens.set(tokenHash, session);
+    return session;
+  }
+
+  public getRefreshToken(tokenHash: string): DBRefreshToken | undefined {
+    return this.refreshTokens.get(tokenHash);
+  }
+
+  public revokeRefreshToken(tokenHash: string): void {
+    const token = this.refreshTokens.get(tokenHash);
+    if (token) {
+      token.revoked = true;
+      this.refreshTokens.set(tokenHash, token);
+    }
+  }
+
+  public revokeAllUserTokens(userId: string): void {
+    const entries = Array.from(this.refreshTokens.entries());
+    for (const [hash, token] of entries) {
+      if (token.userId === userId) {
+        token.revoked = true;
+        this.refreshTokens.set(hash, token);
+      }
+    }
+  }
+
+  // --- Audit Logging ---
+
+  public createAuditLog(entry: {
+    userId?: string;
+    userEmail?: string;
+    action: string;
+    resource?: string;
+    details?: Record<string, unknown>;
+    ipAddress?: string;
+  }): DBAuditLog {
+    const id = `audit_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+    const logItem: DBAuditLog = {
+      id,
+      userId: entry.userId,
+      userEmail: entry.userEmail,
+      action: entry.action,
+      resource: entry.resource,
+      details: entry.details,
+      ipAddress: entry.ipAddress || "127.0.0.1",
+      createdAt: new Date().toISOString(),
+    };
+    this.auditLogs.unshift(logItem);
+    // Keep max 200 logs in memory
+    if (this.auditLogs.length > 200) {
+      this.auditLogs.pop();
+    }
+    return logItem;
+  }
+
+  public getAuditLogs(limit = 50): DBAuditLog[] {
+    return this.auditLogs.slice(0, limit);
   }
 }
 

@@ -1,6 +1,7 @@
 // Node script to test all /api/v1/ endpoints
 async function runTests() {
-  const baseUrl = "http://localhost:3005";
+  const port = process.env.PORT || 3009;
+  const baseUrl = `http://localhost:${port}`;
   console.log(`=== Testing RateConvert RESTful API v1 on ${baseUrl} ===`);
 
   // 1. GET /api/v1/currencies

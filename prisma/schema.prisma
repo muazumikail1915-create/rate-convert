@@ -115,3 +115,71 @@ model MarketSession {
   turnover24hUsd  String   @default("$142.8M")
   lastUpdatedWAT  DateTime @default(now())
 }
+
+// --- Authentication & Session Infrastructure ---
+
+model User {
+  id                  String         @id @default(uuid())
+  email               String         @unique
+  name                String
+  passwordHash        String
+  role                String         @default("USER") // "USER", "ADMIN", "SUPER_ADMIN"
+  status              String         @default("PENDING_VERIFICATION") // "ACTIVE", "PENDING_VERIFICATION", "SUSPENDED", "LOCKED"
+  mfaEnabled          Boolean        @default(false)
+  mfaSecret           String?
+  failedLoginAttempts Int            @default(0)
+  lockoutUntil        DateTime?
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  refreshTokens       RefreshToken[]
+  auditLogs           AuditLog[]
+
+  @@index([email])
+  @@index([role])
+  @@index([status])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  tokenHash String   @unique
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userAgent String?
+  ipAddress String?
+  revoked   Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model VerificationToken {
+  id         String   @id @default(uuid())
+  identifier String
+  token      String
+  type       String   // "EMAIL_VERIFY", "PASSWORD_RESET", "MFA_CHALLENGE"
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+
+  @@unique([identifier, type])
+  @@index([identifier])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  userEmail String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  resource  String?
+  details   String?
+  ipAddress String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+}
+
