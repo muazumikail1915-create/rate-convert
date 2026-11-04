@@ -261,6 +261,9 @@ export const RateComparison: React.FC<RateComparisonProps> = ({
                   <td className="py-4 px-4 text-right">
                     <button
                       type="button"
+                      onClick={() => {
+                        window.scrollTo({ top: 0, behavior: "smooth" });
+                      }}
                       className={`px-3.5 py-1.5 rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-all ${
                         isBest
                           ? "bg-emerald-500 hover:bg-emerald-400 text-slate-950 shadow-md shadow-emerald-500/20"

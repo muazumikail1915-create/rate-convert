@@ -8,6 +8,7 @@ import { RateChart } from "@/components/RateChart";
 import { RateComparison } from "@/components/RateComparison";
 import { MarketIntelligence } from "@/components/MarketIntelligence";
 import { RateType } from "@/lib/mock-rates";
+import { DeveloperPortalModal } from "@/components/DeveloperPortalModal";
 import {
   ShieldCheck,
   Zap,
@@ -26,6 +27,7 @@ export default function Home() {
   const [targetCurrency, setTargetCurrency] = useState<string>("NGN");
   const [rateType, setRateType] = useState<RateType>("official");
   const [currentAmount, setCurrentAmount] = useState<string>("1000");
+  const [isDevModalOpen, setIsDevModalOpen] = useState<boolean>(false);
 
   const handleCurrencyChange = (base: string, target: string, type: RateType) => {
     setBaseCurrency(base);
@@ -84,7 +86,7 @@ export default function Home() {
         </div>
 
         {/* Section 2: Rate Comparison Matrix */}
-        <section aria-labelledby="rate-comparison-heading">
+        <section id="rate-comparison" aria-labelledby="rate-comparison-heading">
           <div className="mb-4 flex items-center justify-between">
             <h2 id="rate-comparison-heading" className="sr-only">
               Market Rate Comparison
@@ -98,7 +100,7 @@ export default function Home() {
         </section>
 
         {/* Section 3: Nigerian FX Market Intelligence & Liquidity Overview */}
-        <section aria-labelledby="market-intelligence-heading">
+        <section id="market-intelligence" aria-labelledby="market-intelligence-heading">
           <div className="mb-4 flex items-center justify-between">
             <h2 id="market-intelligence-heading" className="sr-only">
               Nigerian FX Market Intelligence
@@ -170,16 +172,20 @@ export default function Home() {
             </div>
 
             <div className="flex flex-wrap items-center justify-center gap-6 text-xs text-slate-400">
-              <a href="#" className="hover:text-emerald-400 transition-colors">
+              <a href="#market-intelligence" className="hover:text-emerald-400 transition-colors">
                 NFEM Methodology
               </a>
-              <a href="#" className="hover:text-emerald-400 transition-colors">
+              <a href="#rate-comparison" className="hover:text-emerald-400 transition-colors">
                 Bank FX Circulars
               </a>
-              <a href="#" className="hover:text-emerald-400 transition-colors">
+              <button
+                type="button"
+                onClick={() => setIsDevModalOpen(true)}
+                className="hover:text-emerald-400 transition-colors"
+              >
                 Developer API
-              </a>
-              <a href="#" className="hover:text-emerald-400 transition-colors">
+              </button>
+              <a href="#disclaimer" className="hover:text-emerald-400 transition-colors">
                 Disclaimer &amp; Terms
               </a>
             </div>
@@ -189,11 +195,17 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="mt-8 pt-6 border-t border-slate-900 text-center text-[11px] text-slate-400 max-w-4xl mx-auto leading-relaxed">
+          <div id="disclaimer" className="mt-8 pt-6 border-t border-slate-900 text-center text-[11px] text-slate-400 max-w-4xl mx-auto leading-relaxed">
             Regulatory Notice: Exchange rates and fee structures displayed are collected for analytical and informational purposes. Real-time bank execution quotes, official NFEM bids, and cross-border remittance delivery times are subject to prevailing liquidity, KYC clearance, and institutional market spreads.
           </div>
         </div>
       </footer>
+
+      {/* Developer API Portal Modal */}
+      <DeveloperPortalModal
+        isOpen={isDevModalOpen}
+        onClose={() => setIsDevModalOpen(false)}
+      />
     </div>
   );
 }

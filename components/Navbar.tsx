@@ -72,16 +72,16 @@ export function Navbar() {
       <header className="sticky top-0 z-40 w-full border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20">
-            {/* Brand Logo */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 p-[1.5px] shadow-lg shadow-emerald-500/20">
+            {/* Brand Logo Link */}
+            <Link href="/" className="flex items-center gap-3 group">
+              <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 via-emerald-500 to-teal-400 p-[1.5px] shadow-lg shadow-emerald-500/20 group-hover:scale-105 transition-transform">
                 <div className="w-full h-full bg-slate-950 rounded-[14px] flex items-center justify-center">
                   <TrendingUp className="w-5 h-5 text-emerald-400" />
                 </div>
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="text-lg sm:text-xl font-black text-white tracking-tight">
+                  <span className="text-lg sm:text-xl font-black text-white tracking-tight group-hover:text-emerald-300 transition-colors">
                     Rate<span className="text-emerald-400">Convert</span>
                   </span>
                   <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
@@ -92,7 +92,7 @@ export function Navbar() {
                   Institutional FX &amp; Remittance Intelligence
                 </p>
               </div>
-            </div>
+            </Link>
 
             {/* Center Market Status Bar */}
             <div className="hidden lg:flex items-center gap-4 px-4 py-2 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
